@@ -6,11 +6,13 @@ import '../models/accessibility_settings.dart';
 import '../services/auth_service.dart';
 import '../services/history_service.dart';
 import '../services/accessibility_service.dart';
+import '../services/notification_service.dart';
 
 enum AppScreen {
   login,
   signup,
   initialAssessment,
+  initialRoutine,
   home,
   moodCheckin,
   assessment,
@@ -23,6 +25,7 @@ enum AppScreen {
   notificationSettings,
   privacyPolicy,
   helpSupport,
+  preferencesAssessment,
 }
 
 class AppProvider extends ChangeNotifier {
@@ -42,6 +45,8 @@ class AppProvider extends ChangeNotifier {
 
   // Mood checkin state
   MoodLabel? _selectedMood;
+  String? _pendingCompanionEvent;
+  String? _companionNotification;
 
   // Accessibility settings (loaded from storage in init())
   AccessibilitySettings _accessibility = const AccessibilitySettings();
@@ -54,6 +59,8 @@ class AppProvider extends ChangeNotifier {
   int? get assessmentScore => _assessmentScore;
   String? get assessmentCategory => _assessmentCategory;
   MoodLabel? get selectedMood => _selectedMood;
+  String? get pendingCompanionEvent => _pendingCompanionEvent;
+  String? get companionNotification => _companionNotification;
   AccessibilitySettings get accessibility => _accessibility;
 
   // Called once from main() before runApp to load persisted settings.
@@ -110,9 +117,12 @@ class AppProvider extends ChangeNotifier {
     if (result.ok) {
       _currentUser = result.user!;
       _history = await _historyService.getHistory(_currentUser!.id);
-      _screen = _currentUser!.initialAssessmentScore == null
-          ? AppScreen.initialAssessment
-          : AppScreen.home;
+      await NotificationService.scheduleDailyReminders();
+      _screen = _pendingCompanionEvent != null
+          ? AppScreen.chat
+          : _currentUser!.initialAssessmentScore == null
+              ? AppScreen.initialAssessment
+              : AppScreen.home;
     } else {
       _error = result.error;
     }
@@ -135,7 +145,10 @@ class AppProvider extends ChangeNotifier {
     if (result.ok) {
       _currentUser = result.user!;
       _history = [];
-      _screen = AppScreen.initialAssessment;
+      await NotificationService.scheduleDailyReminders();
+      _screen = _pendingCompanionEvent != null
+          ? AppScreen.chat
+          : AppScreen.initialAssessment;
     } else {
       _error = result.error;
     }
@@ -143,12 +156,15 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await NotificationService.cancelAll();
     await _auth.logout();
     _currentUser = null;
     _history = [];
     _assessmentScore = null;
     _assessmentCategory = null;
     _selectedMood = null;
+    _pendingCompanionEvent = null;
+    _companionNotification = null;
     _screen = AppScreen.login;
     notifyListeners();
   }
@@ -173,16 +189,80 @@ class AppProvider extends ChangeNotifier {
       initialAssessmentCategory: category,
     );
     if (updated != null) _currentUser = updated;
+    _pendingCompanionEvent = 'initial assessment';
     notifyListeners();
+  }
+
+  Future<void> saveSupportPreferences({
+    required String supportStyle,
+    required String focusWindow,
+    required String reminderPreference,
+  }) async {
+    if (_currentUser == null) return;
+    final updated = await _auth.updateUser(
+      _currentUser!.id,
+      supportStyle: supportStyle,
+      focusWindow: focusWindow,
+      reminderPreference: reminderPreference,
+    );
+    if (updated != null) _currentUser = updated;
+    _pendingCompanionEvent = 'support preferences';
+    notifyListeners();
+  }
+
+  Future<void> saveRoutineProfile({
+    required String averageSleepTime,
+    required String sleepDuration,
+    required String dietPattern,
+    required String physicalActivity,
+  }) async {
+    if (_currentUser == null) return;
+    final updated = await _auth.updateUser(
+      _currentUser!.id,
+      averageSleepTime: averageSleepTime,
+      sleepDuration: sleepDuration,
+      dietPattern: dietPattern,
+      physicalActivity: physicalActivity,
+    );
+    if (updated != null) _currentUser = updated;
+    _pendingCompanionEvent = _pendingCompanionEvent == 'initial assessment'
+        ? 'initial assessment and routine check-in'
+        : 'routine check-in';
+    notifyListeners();
+  }
+
+  void notifyCompanion(String message) {
+    _companionNotification = message;
+    notifyListeners();
+  }
+
+  void clearCompanionNotification() {
+    _companionNotification = null;
   }
 
   // ── History ──
 
   Future<void> addHistoryEntry(HistoryEntry entry) async {
     _history = [entry, ..._history];
+    _pendingCompanionEvent = entry.type == EntryType.mood
+        ? 'mood check-in'
+        : entry.type == EntryType.assessment
+            ? 'daily assessment'
+            : null;
     if (_currentUser != null) {
       await _historyService.addEntry(_currentUser!.id, entry);
     }
+    notifyListeners();
+  }
+
+  void clearPendingCompanionEvent() {
+    _pendingCompanionEvent = null;
+  }
+
+  void openNotificationPrompt(String prompt) {
+    if (prompt.trim().isEmpty) return;
+    _pendingCompanionEvent = prompt.trim();
+    if (_currentUser != null) _screen = AppScreen.chat;
     notifyListeners();
   }
 
@@ -216,6 +296,15 @@ class AppProvider extends ChangeNotifier {
         'gender': _currentUser?.gender,
         'initialAssessmentScore': _currentUser?.initialAssessmentScore,
         'initialAssessmentCategory': _currentUser?.initialAssessmentCategory,
+        'supportPreferences': {
+          'supportStyle': _currentUser?.supportStyle,
+          'focusWindow': _currentUser?.focusWindow,
+          'reminderPreference': _currentUser?.reminderPreference,
+          'averageSleepTime': _currentUser?.averageSleepTime,
+          'sleepDuration': _currentUser?.sleepDuration,
+          'dietPattern': _currentUser?.dietPattern,
+          'physicalActivity': _currentUser?.physicalActivity,
+        },
         'latestAssessmentScore': _assessmentScore,
         'latestAssessmentCategory': _assessmentCategory,
         'history': _history.map((e) => e.toJson()).toList(),

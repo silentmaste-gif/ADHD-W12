@@ -4,6 +4,7 @@ import '../providers/app_provider.dart';
 import '../models/history_entry.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
+import '../services/notification_service.dart';
 
 String _nowTime() {
   final t = DateTime.now();
@@ -337,6 +338,128 @@ class _MoodCheckinScreenState extends State<MoodCheckinScreen> {
 
 // ── Assessment ────────────────────────────────────────────────────────────────
 
+class InitialRoutineScreen extends StatefulWidget {
+  const InitialRoutineScreen({super.key});
+
+  @override
+  State<InitialRoutineScreen> createState() => _InitialRoutineScreenState();
+}
+
+class _InitialRoutineScreenState extends State<InitialRoutineScreen> {
+  late String _sleepTime;
+  late String _sleepDuration;
+  late String _diet;
+  late String _activity;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = context.read<AppProvider>().currentUser;
+    _sleepTime = user?.averageSleepTime ?? 'Not set';
+    _sleepDuration = user?.sleepDuration ?? 'Not set';
+    _diet = user?.dietPattern ?? 'Not set';
+    _activity = user?.physicalActivity ?? 'Not set';
+  }
+
+  Widget _field(String label, String value, List<String> options,
+          ValueChanged<String> onChanged) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: DropdownButtonFormField<String>(
+          initialValue: options.contains(value) ? value : options.first,
+          decoration: InputDecoration(
+              labelText: label, border: const OutlineInputBorder()),
+          items: options
+              .map((option) =>
+                  DropdownMenuItem(value: option, child: Text(option)))
+              .toList(),
+          onChanged: (next) {
+            if (next != null) onChanged(next);
+          },
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.read<AppProvider>();
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.mint,
+        leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => app.navigate(AppScreen.home)),
+        title: const Text('Initial Routine Check'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text(
+              'Share your usual routine so support can fit your real life. You can update this whenever your routine changes.',
+              style: TextStyle(fontSize: 15, height: 1.5)),
+          const SizedBox(height: 20),
+          _field(
+              'Usual sleep time',
+              _sleepTime,
+              const [
+                'Not set',
+                'Before 9 PM',
+                '9-11 PM',
+                '11 PM-1 AM',
+                'After 1 AM'
+              ],
+              (value) => setState(() => _sleepTime = value)),
+          _field(
+              'Typical sleep duration',
+              _sleepDuration,
+              const [
+                'Not set',
+                'Less than 5 hours',
+                '5-6 hours',
+                '7-8 hours',
+                'More than 8 hours'
+              ],
+              (value) => setState(() => _sleepDuration = value)),
+          _field(
+              'Typical eating pattern',
+              _diet,
+              const [
+                'Not set',
+                'Regular meals',
+                'Irregular meals',
+                'Often skip meals',
+                'Prefer not to say'
+              ],
+              (value) => setState(() => _diet = value)),
+          _field(
+              'Usual physical activity',
+              _activity,
+              const [
+                'Not set',
+                'Rarely active',
+                'Light activity',
+                'Moderately active',
+                'Very active'
+              ],
+              (value) => setState(() => _activity = value)),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            onPressed: () async {
+              await app.saveRoutineProfile(
+                averageSleepTime: _sleepTime,
+                sleepDuration: _sleepDuration,
+                dietPattern: _diet,
+                physicalActivity: _activity,
+              );
+              if (mounted) app.navigate(AppScreen.home);
+            },
+            child: const Text('Save Initial Routine'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 const _assessmentQuestions = [
   'How often do you have difficulty sustaining attention in tasks or activities?',
   'How often do you find yourself easily distracted by external stimuli?',
@@ -374,10 +497,116 @@ class AssessmentScreen extends StatefulWidget {
 class _AssessmentScreenState extends State<AssessmentScreen> {
   int _current = 0;
   final List<int> _answers = [];
+  bool _routineStep = false;
+  String _totalSleepToday = 'Not set';
+  String _mealsToday = 'Not set';
+  String _activityToday = 'Not set';
+  int? _pendingScore;
+  String? _pendingCategory;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  Widget _routineField({
+    required String label,
+    required String value,
+    required List<String> options,
+    required ValueChanged<String> onChanged,
+  }) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: DropdownButtonFormField<String>(
+          initialValue: options.contains(value) ? value : options.first,
+          decoration: InputDecoration(
+              labelText: label, border: const OutlineInputBorder()),
+          items: options
+              .map((option) =>
+                  DropdownMenuItem(value: option, child: Text(option)))
+              .toList(),
+          onChanged: (next) {
+            if (next != null) onChanged(next);
+          },
+        ),
+      );
+
+  Widget _buildRoutineStep(AppProvider app) => Scaffold(
+        appBar: AppBar(
+          backgroundColor: AppColors.mint,
+          leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => app.navigate(AppScreen.home)),
+          title: const Text('Daily Routine Check-in'),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const Text(
+                'Add a few details about today. These stay with today\'s assessment and help your companion notice daily patterns.',
+                style: TextStyle(fontSize: 15, height: 1.5)),
+            const SizedBox(height: 20),
+            _routineField(
+              label: 'Total sleep last night',
+              value: _totalSleepToday,
+              options: const [
+                'Not set',
+                'Less than 5 hours',
+                '5-6 hours',
+                '7-8 hours',
+                'More than 8 hours',
+              ],
+              onChanged: (value) => setState(() => _totalSleepToday = value),
+            ),
+            _routineField(
+              label: 'Meals eaten today',
+              value: _mealsToday,
+              options: const [
+                'Not set',
+                '0',
+                '1',
+                '2',
+                '3 or more',
+              ],
+              onChanged: (value) => setState(() => _mealsToday = value),
+            ),
+            _routineField(
+              label: 'Physical activity today',
+              value: _activityToday,
+              options: const [
+                'Not set',
+                'None yet',
+                'Light movement',
+                'Moderate activity',
+                'Vigorous activity',
+              ],
+              onChanged: (value) => setState(() => _activityToday = value),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () async {
+                final entry = HistoryEntry(
+                  id: 'assess_${DateTime.now().millisecondsSinceEpoch}',
+                  type: EntryType.assessment,
+                  label: 'Daily Assessment completed',
+                  timestamp: _nowTime(),
+                  isToday: true,
+                  score: _pendingScore,
+                  category: _pendingCategory,
+                );
+                await app.addHistoryEntry(entry);
+                if (mounted) app.navigate(AppScreen.assessmentResult);
+              },
+              child: const Text('Save Routine and View Result'),
+            ),
+          ],
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppProvider>();
+    if (_routineStep) return _buildRoutineStep(app);
     final progress = _current / _assessmentQuestions.length;
 
     return Scaffold(
@@ -441,17 +670,11 @@ class _AssessmentScreenState extends State<AssessmentScreen> {
                     final total = newAnswers.fold(0, (a, b) => a + b);
                     final cat = _getCategory(total);
                     app.setAssessmentResult(total, cat);
-                    final entry = HistoryEntry(
-                      id: 'assess_${DateTime.now().millisecondsSinceEpoch}',
-                      type: EntryType.assessment,
-                      label: 'Daily Assessment completed',
-                      timestamp: _nowTime(),
-                      isToday: true,
-                      score: total,
-                      category: cat,
-                    );
-                    app.addHistoryEntry(entry);
-                    app.navigate(AppScreen.assessmentResult);
+                    setState(() {
+                      _pendingScore = total;
+                      _pendingCategory = cat;
+                      _routineStep = true;
+                    });
                   }
                 },
                 child: Container(
@@ -699,9 +922,39 @@ class NotificationSettingsScreen extends StatefulWidget {
 
 class _NotificationSettingsScreenState
     extends State<NotificationSettingsScreen> {
-  final _toggles = {'assessment': true, 'mood': true, 'chat': true};
+  var _assessment = true;
+  var _mood = true;
+  var _tasks = true;
   var _sound = true;
   var _vibration = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final preferences = await NotificationService.loadPreferences();
+    if (!mounted) return;
+    setState(() {
+      _assessment = preferences.assessment;
+      _mood = preferences.mood;
+      _tasks = preferences.tasks;
+      _sound = preferences.sound;
+      _vibration = preferences.vibration;
+    });
+  }
+
+  Future<void> _savePreferences() => NotificationService.savePreferences(
+        NotificationPreferences(
+          assessment: _assessment,
+          mood: _mood,
+          tasks: _tasks,
+          sound: _sound,
+          vibration: _vibration,
+        ),
+      );
 
   static const _items = [
     (
@@ -729,15 +982,30 @@ class _NotificationSettingsScreenState
             style: TextStyle(fontSize: 13, color: AppColors.textMid)),
         const SizedBox(height: 12),
         ..._items.map((item) {
-          final (key, label, desc) = item;
+          final (_, label, desc) = item;
+          final value = label == 'Daily Assessment Reminder'
+              ? _assessment
+              : label == 'Daily Mood Check-in'
+                  ? _mood
+                  : _tasks;
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _NotifCard(
                 label: label,
                 desc: desc,
-                value: _toggles[key]!,
-                onToggle: () =>
-                    setState(() => _toggles[key] = !_toggles[key]!)),
+                value: value,
+                onToggle: () {
+                  setState(() {
+                    if (label == 'Daily Assessment Reminder') {
+                      _assessment = !_assessment;
+                    } else if (label == 'Daily Mood Check-in') {
+                      _mood = !_mood;
+                    } else {
+                      _tasks = !_tasks;
+                    }
+                  });
+                  _savePreferences();
+                }),
           );
         }),
         const SizedBox(height: 8),
@@ -814,6 +1082,119 @@ class _NotifCard extends StatelessWidget {
             ),
           ),
         ]),
+      );
+}
+
+class PreferencesAssessmentScreen extends StatefulWidget {
+  const PreferencesAssessmentScreen({super.key});
+
+  @override
+  State<PreferencesAssessmentScreen> createState() =>
+      _PreferencesAssessmentScreenState();
+}
+
+class _PreferencesAssessmentScreenState
+    extends State<PreferencesAssessmentScreen> {
+  String _supportStyle = 'Gentle and encouraging';
+  String _focusWindow = 'Not sure yet';
+  String _reminderPreference = 'A few gentle reminders';
+  bool _saving = false;
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    await context.read<AppProvider>().saveSupportPreferences(
+          supportStyle: _supportStyle,
+          focusWindow: _focusWindow,
+          reminderPreference: _reminderPreference,
+        );
+    if (mounted) {
+      setState(() => _saving = false);
+      context.read<AppProvider>().navigate(AppScreen.home);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.read<AppProvider>();
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.mint,
+        leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, size: 18),
+            onPressed: () => app.navigate(AppScreen.home)),
+        title: const Text('Support Preferences'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('Help your companion understand what works for you.',
+              style: TextStyle(fontSize: 16, height: 1.5)),
+          const SizedBox(height: 20),
+          _PreferenceSelect(
+            label: 'How should support sound?',
+            value: _supportStyle,
+            options: const [
+              'Gentle and encouraging',
+              'Direct and practical',
+              'Brief and low-pressure',
+            ],
+            onChanged: (value) => setState(() => _supportStyle = value),
+          ),
+          _PreferenceSelect(
+            label: 'When is focus usually easiest?',
+            value: _focusWindow,
+            options: const ['Morning', 'Afternoon', 'Evening', 'Not sure yet'],
+            onChanged: (value) => setState(() => _focusWindow = value),
+          ),
+          _PreferenceSelect(
+            label: 'How often should reminders appear?',
+            value: _reminderPreference,
+            options: const [
+              'A few gentle reminders',
+              'Only important reminders',
+              'No reminders unless I ask',
+            ],
+            onChanged: (value) => setState(() => _reminderPreference = value),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _saving ? null : _save,
+            child: Text(_saving ? 'Saving...' : 'Save Preferences'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreferenceSelect extends StatelessWidget {
+  final String label;
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  const _PreferenceSelect({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: DropdownButtonFormField<String>(
+          initialValue: value,
+          decoration: InputDecoration(
+              labelText: label, border: const OutlineInputBorder()),
+          items: options
+              .map((option) =>
+                  DropdownMenuItem(value: option, child: Text(option)))
+              .toList(),
+          onChanged: (next) {
+            if (next != null) onChanged(next);
+          },
+        ),
       );
 }
 

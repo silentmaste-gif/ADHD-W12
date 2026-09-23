@@ -35,6 +35,14 @@ class AuthService {
       createdAt: data['createdAt'] as String? ?? '',
       initialAssessmentScore: data['initialAssessmentScore'] as int?,
       initialAssessmentCategory: data['initialAssessmentCategory'] as String?,
+      supportStyle: data['supportStyle'] as String? ?? 'Gentle and encouraging',
+      focusWindow: data['focusWindow'] as String? ?? 'Not sure yet',
+      reminderPreference:
+          data['reminderPreference'] as String? ?? 'A few gentle reminders',
+      averageSleepTime: data['averageSleepTime'] as String? ?? 'Not set',
+      sleepDuration: data['sleepDuration'] as String? ?? 'Not set',
+      dietPattern: data['dietPattern'] as String? ?? 'Not set',
+      physicalActivity: data['physicalActivity'] as String? ?? 'Not set',
     );
   }
 
@@ -148,7 +156,14 @@ class AuthService {
       String? age,
       String? gender,
       int? initialAssessmentScore,
-      String? initialAssessmentCategory}) async {
+      String? initialAssessmentCategory,
+      String? supportStyle,
+      String? focusWindow,
+      String? reminderPreference,
+      String? averageSleepTime,
+      String? sleepDuration,
+      String? dietPattern,
+      String? physicalActivity}) async {
     final updates = <String, dynamic>{};
     if (name != null) updates['name'] = name;
     if (age != null) updates['age'] = age;
@@ -158,6 +173,19 @@ class AuthService {
     }
     if (initialAssessmentCategory != null) {
       updates['initialAssessmentCategory'] = initialAssessmentCategory;
+    }
+    if (supportStyle != null) updates['supportStyle'] = supportStyle;
+    if (focusWindow != null) updates['focusWindow'] = focusWindow;
+    if (reminderPreference != null) {
+      updates['reminderPreference'] = reminderPreference;
+    }
+    if (averageSleepTime != null) {
+      updates['averageSleepTime'] = averageSleepTime;
+    }
+    if (sleepDuration != null) updates['sleepDuration'] = sleepDuration;
+    if (dietPattern != null) updates['dietPattern'] = dietPattern;
+    if (physicalActivity != null) {
+      updates['physicalActivity'] = physicalActivity;
     }
     if (updates.isNotEmpty) await _users.doc(id).update(updates);
     final document = await _users.doc(id).get();

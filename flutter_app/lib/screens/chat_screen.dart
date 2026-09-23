@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/history_entry.dart';
 import '../providers/app_provider.dart';
 import '../services/chat_service.dart';
 import '../services/ai_provider_service.dart';
@@ -33,7 +32,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<_Message> _messages = [];
   final _chatService = ChatService();
   final _providerService = AiProviderService();
-  final _geminiService = GeminiService();
+  final _aiService = AiService();
   AiProviderConfig? _aiConfig;
   bool _isTyping = false;
   bool _isLoading = true;
@@ -42,12 +41,20 @@ class _ChatScreenState extends State<ChatScreen> {
 You are the AIDHD support assistant.
 
 Only discuss ADHD-related focus, routines, organization, study strategies,
-emotional regulation, and general educational support.
+emotional regulation, mental-health-adjacent wellbeing support, and general
+educational support about those topics. If asked for calculus, unrelated
+homework, coding, news, entertainment, or other general questions, kindly say
+that you are focused on ADHD and wellbeing support and invite the user to
+connect the question to focus, stress, planning, or learning habits. Do not
+solve unrelated problems.
 
-You are AIDHD, a proactive daily support companion, not a generic question-
-answering chatbot. Begin by checking in on how the user feels today. Use the
-most recent mood, daily assessment, and initial assessment only as supportive
-context. Never treat those results as a diagnosis.
+You are AIDHD, a present and emotionally attuned support companion, not a
+generic question-answering chatbot. Start conversations yourself. Before
+asking anything, acknowledge the person's humanity and emotional load, offer
+comfort, and show that you understood the context. Do not use a string of
+generic questions as a substitute for empathy. Assessment results and routine
+answers are private context: use them to make support more relevant, but never
+turn them into a diagnosis or expose raw scores.
 
 Do not diagnose ADHD. Do not prescribe medication or give treatment
 instructions. Do not pretend to be a doctor. For medical or treatment
@@ -58,11 +65,15 @@ make assumptions about the user's diagnosis. If the user mentions immediate
 danger or self-harm, encourage contacting local emergency services or a crisis
 line immediately.
 
-Keep each response warm and concise. Reflect one relevant detail, ask one
-gentle question, and offer no more than one small action the user can try now.
-Avoid repeating the same greeting or advice. If the user seems overwhelmed,
-reduce the task to a two-minute step and celebrate starting rather than
-completion.
+Keep responses warm and human, usually 2-4 short paragraphs. Acknowledge,
+comfort, and reflect first; then offer at most one small action and one gentle
+invitation to continue. Avoid repeating greetings or advice. If the user seems
+overwhelmed, reduce the task to a two-minute step and celebrate starting
+rather than completion. Never imply that the user has to perform or explain
+their feelings perfectly.
+Use the user's initial screening category and support preferences as quiet
+personalization context. Never expose raw scores or claim the screening is a
+diagnosis.
 ''';
 
   String _now() {
@@ -90,7 +101,7 @@ completion.
     try {
       final records = await _chatService.getMessages(userId);
       if (!mounted) return;
-      _aiConfig = await _ensureAiConfig();
+      _aiConfig = await _providerService.getConfig(userId);
       if (records.isNotEmpty) {
         _messages.addAll(records.map((record) => _Message(
               id: record.id,
@@ -98,16 +109,27 @@ completion.
               text: record.text,
               time: record.time,
             )));
-        if (_aiConfig != null &&
+        final pendingEvent = app.pendingCompanionEvent;
+        if (pendingEvent != null && _aiConfig != null) {
+          final checkIn =
+              await _generateOpeningMessage(app, event: pendingEvent);
+          await _addAssistantMessage(userId, checkIn, prefix: 'event');
+          app.notifyCompanion(
+              'Your AIDHD companion has started a new check-in.');
+          app.clearPendingCompanionEvent();
+        } else if (_aiConfig != null &&
             await _providerService.needsDailyCheckIn(userId)) {
           final checkIn = await _generateOpeningMessage(app);
           await _addAssistantMessage(userId, checkIn, prefix: 'checkin');
+          app.notifyCompanion(
+              'Your AIDHD companion has a gentle check-in for you.');
           await _providerService.markDailyCheckIn(userId);
         }
       } else {
-        final greeting = _aiConfig == null
-            ? _buildGreeting(app)
-            : await _generateOpeningMessage(app);
+        final greeting = await _generateOpeningMessage(
+          app,
+          event: app.pendingCompanionEvent,
+        );
         final message = _Message(
           id: 'intro_${DateTime.now().millisecondsSinceEpoch}',
           isUser: false,
@@ -122,7 +144,10 @@ completion.
           text: message.text,
           time: message.time,
         );
-        if (_aiConfig != null) await _providerService.markDailyCheckIn(userId);
+        if (_aiConfig != null) {
+          await _providerService.markDailyCheckIn(userId);
+          app.clearPendingCompanionEvent();
+        }
       }
     } catch (_) {
       if (!mounted) return;
@@ -141,7 +166,8 @@ completion.
   }
 
   Future<AiProviderConfig?> _ensureAiConfig({bool replace = false}) async {
-    final userId = context.read<AppProvider>().currentUser?.id;
+    final app = context.read<AppProvider>();
+    final userId = app.currentUser?.id;
     if (userId == null) return null;
     if (!replace) {
       final saved = await _providerService.getConfig(userId);
@@ -153,74 +179,99 @@ completion.
     var provider = saved?.provider ?? AiProvider.gemini;
     final providerController = ValueNotifier<AiProvider>(provider);
     final keyController = TextEditingController(text: saved?.apiKey ?? '');
-    final modelController = TextEditingController(
-        text: saved?.model ?? AiProviderConfig.defaultModel(provider));
-    final endpointController = TextEditingController(
-        text: saved?.endpoint ?? AiProviderConfig.defaultEndpoint(provider));
+    var model = saved?.model ?? AiProviderConfig.defaultModel(provider);
     final config = await showDialog<AiProviderConfig>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: Text(replace ? 'Change AI provider' : 'Connect AI chat'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            const Text(
-              'Choose an AI provider and paste its API key. The key stays on this device and your existing chat history is preserved.',
-              style: TextStyle(height: 1.4),
-            ),
-            const SizedBox(height: 14),
-            ValueListenableBuilder<AiProvider>(
-              valueListenable: providerController,
-              builder: (_, selected, __) => DropdownButtonFormField<AiProvider>(
-                initialValue: selected,
-                decoration: const InputDecoration(
-                    labelText: 'AI provider', border: OutlineInputBorder()),
-                items: AiProvider.values
-                    .map((item) => DropdownMenuItem(
-                        value: item,
-                        child: Text(AiProviderConfig(
-                          provider: item,
-                          apiKey: '',
-                          model: '',
-                          endpoint: '',
-                        ).providerLabel)))
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  providerController.value = value;
-                  modelController.text = AiProviderConfig.defaultModel(value);
-                  endpointController.text =
-                      AiProviderConfig.defaultEndpoint(value);
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: keyController,
-              autofocus: true,
-              obscureText: true,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: 'Gemini API key',
-                hintText: 'Paste API key',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: modelController,
-              decoration: const InputDecoration(
-                  labelText: 'Model', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: endpointController,
-              decoration: const InputDecoration(
-                  labelText: 'API endpoint', border: OutlineInputBorder()),
+            Expanded(
+                child:
+                    Text(replace ? 'Change AI provider' : 'Connect AI chat')),
+            IconButton(
+              tooltip: 'Close',
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(dialogContext),
             ),
           ],
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.62,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Connect an AI provider to enable conversations. Your chat history is preserved, and the selected provider handles the replies.',
+                  style: TextStyle(height: 1.4),
+                ),
+                const SizedBox(height: 14),
+                ValueListenableBuilder<AiProvider>(
+                  valueListenable: providerController,
+                  builder: (_, selected, __) =>
+                      DropdownButtonFormField<AiProvider>(
+                    initialValue: selected,
+                    decoration: const InputDecoration(
+                        labelText: 'AI provider', border: OutlineInputBorder()),
+                    items: AiProvider.values
+                        .map((item) => DropdownMenuItem(
+                            value: item,
+                            child: Text(AiProviderConfig(
+                              provider: item,
+                              apiKey: '',
+                              model: '',
+                              endpoint: '',
+                            ).providerLabel)))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      providerController.value = value;
+                      model = AiProviderConfig.defaultModel(value);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ValueListenableBuilder<AiProvider>(
+                  valueListenable: providerController,
+                  builder: (_, selected, __) => DropdownButtonFormField<String>(
+                    initialValue:
+                        AiProviderConfig.models(selected).contains(model)
+                            ? model
+                            : AiProviderConfig.defaultModel(selected),
+                    decoration: const InputDecoration(
+                        labelText: 'AI model', border: OutlineInputBorder()),
+                    items: AiProviderConfig.models(selected)
+                        .map((item) =>
+                            DropdownMenuItem(value: item, child: Text(item)))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) model = value;
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: keyController,
+                  autofocus: true,
+                  obscureText: true,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Provider API key',
+                    hintText: 'Optional',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                    'The secure endpoint is managed by the selected provider.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textMid)),
+              ],
+            ),
+          ),
         ),
         actions: [
           if (replace)
@@ -237,8 +288,9 @@ completion.
                     AiProviderConfig(
                       provider: providerController.value,
                       apiKey: key,
-                      model: modelController.text.trim(),
-                      endpoint: endpointController.text.trim(),
+                      model: model,
+                      endpoint: AiProviderConfig.defaultEndpoint(
+                          providerController.value),
                     ));
               }
             },
@@ -247,31 +299,38 @@ completion.
         ],
       ),
     );
-    providerController.dispose();
-    keyController.dispose();
-    modelController.dispose();
-    endpointController.dispose();
     if (config == null) return null;
     await _providerService.saveConfig(userId, config);
+    _aiConfig = config;
+    final event = app.pendingCompanionEvent;
+    if (event != null && mounted) {
+      final opening = await _generateOpeningMessage(app, event: event);
+      await _addAssistantMessage(userId, opening, prefix: 'event');
+      app.notifyCompanion('Your AIDHD companion has started a new check-in.');
+      app.clearPendingCompanionEvent();
+    }
     return config;
   }
 
-  Future<String> _generateOpeningMessage(AppProvider app) async {
+  Future<String> _generateOpeningMessage(AppProvider app,
+      {String? event}) async {
+    if (_aiConfig == null) return _buildGreeting(app, event: event);
     try {
-      return await _geminiService.sendMessage(
+      final eventInstruction = event == null
+          ? 'Start by offering a calm, emotionally supportive welcome. Do not lead with a question.'
+          : 'The user tapped a reminder with this prompt: "$event". Acknowledge it warmly, ask the user about it gently, and offer one practical next step. Do not report scores or labels.';
+      return await _aiService.sendMessage(
         config: _aiConfig!,
         systemPrompt: _systemPrompt,
         history: const [],
-        message: '''You are opening today's AIDHD check-in. Use this context:
+        message: '''You are opening a conversation with the user.
+      $eventInstruction
+      Use this context only to personalize language:
 ${jsonEncode(app.buildAiContext())}
 
-    Start with a natural, human-sounding check-in. Mention only one relevant
-    observation from the latest mood or daily assessment, if available. Briefly
-    connect it to their initial assessment only when useful. Then ask how they feel
-    right now and offer one small ADHD-friendly coping step. Do not list all of the
-    stored data, use clinical labels, or say that you are an AI.''',
+      Start with a natural, comforting message that feels personally present. Do not list stored data, use clinical labels, or say that you are an AI.''',
       );
-    } on GeminiException catch (error) {
+    } on AiException catch (error) {
       if (error.keyProblem) _aiConfig = await _ensureAiConfig(replace: true);
       return _buildGreeting(app);
     }
@@ -291,29 +350,15 @@ ${jsonEncode(app.buildAiContext())}
     _scrollToBottom();
   }
 
-  String _buildGreeting(AppProvider app) {
+  String _buildGreeting(AppProvider app, {String? event}) {
     final name = app.currentUser?.name ?? '';
-    final moodEntries = app.history.where((entry) => entry.mood != null);
-    final latestMood = moodEntries.isEmpty ? null : moodEntries.first.mood;
-    final assessments = app.history
-        .where((entry) => entry.type == EntryType.assessment && entry.isToday);
-    final todayAssessment = assessments.isEmpty ? null : assessments.first;
-    final parts = <String>[];
-    if (latestMood != null) {
-      parts.add(
-          'You marked your mood as ${latestMood.displayName.toLowerCase()}');
+    if (_aiConfig == null) {
+      return 'Hi${name.isNotEmpty ? " $name" : ""}. You do not have to carry everything alone here. Your companion is ready whenever you connect an AI provider, and we can take things gently from there.';
     }
-    if (todayAssessment != null) {
-      parts.add('you completed today\'s assessment');
-    }
-    if (app.currentUser?.initialAssessmentCategory != null) {
-      parts.add(
-          'your initial screening was ${app.currentUser!.initialAssessmentCategory!.toLowerCase()}');
-    }
-    final contextLine = parts.isEmpty
-        ? 'Before we plan anything, how are you feeling today? We can take one small step together.'
-        : '${parts.join(', and ')}. How are you feeling right now? We can choose one small next step together.';
-    return 'Hi${name.isNotEmpty ? " $name" : ""}. I\'m your AIDHD check-in companion. $contextLine';
+    final eventLine = event == null
+        ? 'There is no rush to solve anything today. You can arrive exactly as you are, and we can take one small, kind step together.'
+        : 'You just made time for your $event, and that matters. Whatever it brought up, you do not have to make it sound neat here. We can go gently from this point.';
+    return 'Hi${name.isNotEmpty ? " $name" : ""}. I\'m here with you. $eventLine';
   }
 
   @override
@@ -343,8 +388,10 @@ ${jsonEncode(app.buildAiContext())}
     final app = context.read<AppProvider>();
     final userId = app.currentUser?.id;
     if (userId == null) return;
-    _aiConfig ??= await _ensureAiConfig();
-    if (_aiConfig == null) return;
+    if (_aiConfig == null) {
+      _aiConfig = await _ensureAiConfig();
+      if (_aiConfig == null) return;
+    }
     _ctrl.clear();
     final userMessage = _Message(
       id: 'u${DateTime.now().millisecondsSinceEpoch}',
@@ -360,13 +407,11 @@ ${jsonEncode(app.buildAiContext())}
     _scrollToBottom();
 
     try {
-      final prompt = '''
-User context:
-${jsonEncode(app.buildAiContext())}
+      final prompt = '''User profile and support context:
+    ${jsonEncode(app.buildAiContext())}
 
-User message:
-$text
-''';
+    User message:
+    $text''';
       final history = _messages
           .where((message) => message.id != userMessage.id)
           .where((message) => !message.id.startsWith('e'))
@@ -375,7 +420,7 @@ $text
                 'text': message.text,
               })
           .toList();
-      final reply = await _geminiService.sendMessage(
+      final reply = await _aiService.sendMessage(
         config: _aiConfig!,
         systemPrompt: _systemPrompt,
         history: history,
@@ -392,7 +437,7 @@ $text
         _messages.add(assistantMessage);
       });
       await _persistMessage(userId, assistantMessage);
-    } on GeminiException catch (error) {
+    } on AiException catch (error) {
       if (!mounted) return;
       if (error.keyProblem) {
         _aiConfig = await _ensureAiConfig(replace: true);
@@ -402,7 +447,7 @@ $text
           id: 'e${DateTime.now().millisecondsSinceEpoch}',
           isUser: false,
           text: error.keyProblem
-              ? 'Your Gemini key needs attention. Add a working key to continue; your chat history is still here.'
+              ? 'The connected provider needs attention. You can replace it, or continue with the built-in companion.'
               : error.message,
           time: _now(),
         ));
@@ -428,8 +473,14 @@ $text
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollCtrl.hasClients) {
+            _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut);
+          }
+        });
       }
     });
   }
@@ -464,7 +515,7 @@ $text
         ]),
         actions: [
           IconButton(
-            tooltip: 'Replace Gemini API key',
+            tooltip: 'Choose AI provider and model',
             icon: const Icon(Icons.key_outlined),
             onPressed: () async {
               final config = await _ensureAiConfig(replace: true);

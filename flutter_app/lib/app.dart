@@ -40,6 +40,8 @@ class _Router extends StatelessWidget {
         return const SignUpScreen();
       case AppScreen.initialAssessment:
         return const InitialAssessmentScreen();
+      case AppScreen.initialRoutine:
+        return const InitialRoutineScreen();
       case AppScreen.home:
         return const HomeScreen();
       case AppScreen.moodCheckin:
@@ -64,6 +66,8 @@ class _Router extends StatelessWidget {
         return const PrivacyPolicyScreen();
       case AppScreen.helpSupport:
         return const HelpSupportScreen();
+      case AppScreen.preferencesAssessment:
+        return const PreferencesAssessmentScreen();
     }
   }
 }

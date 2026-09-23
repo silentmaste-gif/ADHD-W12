@@ -29,6 +29,12 @@ class SettingsScreen extends StatelessWidget {
         'Get help and contact support.',
         AppScreen.helpSupport
       ),
+      (
+        Icons.tune,
+        'Support Preferences',
+        'Personalize how your companion helps.',
+        AppScreen.preferencesAssessment
+      ),
     ];
 
     return Scaffold(

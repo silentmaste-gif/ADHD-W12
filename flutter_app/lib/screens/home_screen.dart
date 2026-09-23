@@ -20,11 +20,28 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final todayEntries = app.history.where((e) => e.isToday).take(2).toList();
+    final hasTodayAssessment = app.history
+        .any((entry) => entry.isToday && entry.type == EntryType.assessment);
+    final reminder = app.companionNotification ??
+        (!hasTodayAssessment
+            ? 'A gentle reminder: your daily check-in is ready whenever you are.'
+            : null);
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
+            if (reminder != null)
+              MaterialBanner(
+                content: Text(reminder),
+                leading: const Icon(Icons.notifications_active_outlined),
+                actions: [
+                  TextButton(
+                    onPressed: app.clearCompanionNotification,
+                    child: const Text('Dismiss'),
+                  ),
+                ],
+              ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -60,7 +77,7 @@ class HomeScreen extends StatelessWidget {
                       ]),
                     ),
 
-                    // Chat + Assessment cards
+                    // Chat + daily assessment
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(children: [
@@ -72,9 +89,9 @@ class HomeScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: 12),
                         _ActionCard(
-                          icon: Icons.assignment_outlined,
-                          title: 'Assessment',
-                          subtitle: 'Take your daily assessment',
+                          icon: Icons.today_outlined,
+                          title: 'Daily Assessment',
+                          subtitle: 'Track today\'s patterns',
                           onTap: () => app.navigate(AppScreen.assessment),
                         ),
                       ]),
@@ -135,6 +152,38 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ),
                       ]),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Initial answers and personalized guidance
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(children: [
+                        Expanded(
+                          child: _InitialSummaryCard(
+                            title: 'Initial Screening',
+                            icon: Icons.assignment_outlined,
+                            value: app.currentUser?.initialAssessmentCategory ??
+                                'Not completed',
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _InitialSummaryCard(
+                            title: 'Initial Routine',
+                            icon: Icons.schedule_outlined,
+                            value:
+                                app.currentUser?.averageSleepTime == 'Not set'
+                                    ? 'Not completed'
+                                    : app.currentUser!.averageSleepTime,
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _InitialGuidanceCard(app: app),
                     ),
                     const SizedBox(height: 24),
 
@@ -282,6 +331,79 @@ class _ActionCard extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _InitialSummaryCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final String value;
+
+  const _InitialSummaryCard({
+    required this.title,
+    required this.icon,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 122),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: AppColors.primary, size: 22),
+            const SizedBox(height: 8),
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark)),
+            const SizedBox(height: 4),
+            Text(value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.textMid)),
+          ],
+        ),
+      );
+}
+
+class _InitialGuidanceCard extends StatelessWidget {
+  final AppProvider app;
+
+  const _InitialGuidanceCard({required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = app.currentUser;
+    final screening = user?.initialAssessmentCategory;
+    final routine = user?.averageSleepTime;
+    final message = screening == null || routine == null || routine == 'Not set'
+        ? 'Complete both initial check-ins so your companion can offer more personal suggestions.'
+        : 'Your companion can use these answers to suggest support that fits your routine. Start with one gentle step and adjust it together in chat.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.mint,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.lightbulb_outline, color: AppColors.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(message,
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.textDark, height: 1.45)),
+        ),
+      ]),
+    );
+  }
 }
 
 class _HeaderIconBtn extends StatelessWidget {

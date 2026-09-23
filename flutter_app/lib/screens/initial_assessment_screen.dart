@@ -350,9 +350,9 @@ class _InitialAssessmentScreenState extends State<InitialAssessmentScreen> {
             ),
             const SizedBox(height: 28),
             ElevatedButton(
-                onPressed: () => app.navigate(AppScreen.home),
-                child:
-                    const Text('Go to Home', style: TextStyle(fontSize: 17))),
+                onPressed: () => app.navigate(AppScreen.initialRoutine),
+                child: const Text('Continue to Routine Check',
+                    style: TextStyle(fontSize: 17))),
           ]),
         ),
       ),

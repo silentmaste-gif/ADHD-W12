@@ -3,17 +3,17 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'ai_provider_service.dart';
 
-class GeminiException implements Exception {
+class AiException implements Exception {
   final String message;
   final bool keyProblem;
 
-  const GeminiException(this.message, {this.keyProblem = false});
+  const AiException(this.message, {this.keyProblem = false});
 
   @override
   String toString() => message;
 }
 
-class GeminiService {
+class AiService {
   Future<String> sendMessage({
     required AiProviderConfig config,
     required String systemPrompt,
@@ -65,29 +65,26 @@ class GeminiService {
             .toList(),
         'generationConfig': {
           'temperature': 0.6,
-          'maxOutputTokens': 450,
+          'maxOutputTokens': 900,
         },
       }),
     );
 
     final data = _decode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw GeminiException(
-        _errorMessage(response.statusCode, data),
-        keyProblem: response.statusCode == 400 ||
-            response.statusCode == 401 ||
-            response.statusCode == 403 ||
-            response.statusCode == 429,
-      );
+      throw AiException(_errorMessage(response.statusCode, data),
+          keyProblem: response.statusCode == 401 ||
+              response.statusCode == 403 ||
+              response.statusCode == 429);
     }
 
     final candidates = data['candidates'];
     if (candidates is! List || candidates.isEmpty) {
-      throw const GeminiException('Gemini did not return a response.');
+      throw const AiException('Gemini did not return a response.');
     }
     final parts = candidates.first['content']?['parts'];
     if (parts is! List || parts.isEmpty || parts.first['text'] is! String) {
-      throw const GeminiException('Gemini returned an empty response.');
+      throw const AiException('Gemini returned an empty response.');
     }
     return (parts.first['text'] as String).trim();
   }
@@ -106,35 +103,50 @@ class GeminiService {
           }),
       {'role': 'user', 'content': message},
     ];
+    final requestBody = <String, dynamic>{
+      'model': config.model,
+      'messages': messages,
+      if (config.model.startsWith('gpt-5'))
+        'max_completion_tokens': 900
+      else ...{
+        'temperature': 0.6,
+        'max_tokens': 900,
+      },
+    };
     final response = await http.post(
       Uri.parse(config.endpoint),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ${config.apiKey}',
       },
-      body: jsonEncode({
-        'model': config.model,
-        'messages': messages,
-        'temperature': 0.6,
-        'max_tokens': 450,
-      }),
+      body: jsonEncode(requestBody),
     );
     final data = _decode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw GeminiException(
-        _errorMessage(response.statusCode, data),
-        keyProblem: response.statusCode == 400 ||
-            response.statusCode == 401 ||
-            response.statusCode == 403 ||
-            response.statusCode == 429,
-      );
+      throw AiException(_errorMessage(response.statusCode, data),
+          keyProblem: response.statusCode == 401 ||
+              response.statusCode == 403 ||
+              response.statusCode == 429);
     }
     final content = data['choices']?[0]?['message']?['content'];
-    if (content is! String || content.trim().isEmpty) {
-      throw const GeminiException(
-          'The selected AI returned an empty response.');
+    final text = _readOpenAiContent(content);
+    if (text == null || text.trim().isEmpty) {
+      throw const AiException('The selected AI returned an empty response.');
     }
-    return content.trim();
+    return text.trim();
+  }
+
+  String? _readOpenAiContent(dynamic content) {
+    if (content is String) return content;
+    if (content is List) {
+      final parts = content
+          .whereType<Map>()
+          .map((part) => part['text'])
+          .whereType<String>()
+          .toList();
+      if (parts.isNotEmpty) return parts.join();
+    }
+    return null;
   }
 
   Map<String, dynamic> _decode(String body) {
@@ -151,13 +163,13 @@ class GeminiService {
     if (message is String && message.isNotEmpty) return message;
     switch (statusCode) {
       case 429:
-        return 'This Gemini API key has reached its usage limit.';
+        return 'This AI provider has reached its usage limit.';
       case 400:
       case 401:
       case 403:
-        return 'This Gemini API key was rejected. Check the key and try again.';
+        return 'This AI provider key was rejected. Check it and try again.';
       default:
-        return 'Gemini is temporarily unavailable. Please try again.';
+        return 'The selected AI provider is temporarily unavailable. Please try again.';
     }
   }
 }

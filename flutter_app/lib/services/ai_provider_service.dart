@@ -1,8 +1,9 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AiProvider { gemini, openAi, custom }
+enum AiProvider { gemini, openAi }
 
 class AiProviderConfig {
   final AiProvider provider;
@@ -23,8 +24,6 @@ class AiProviderConfig {
         return 'Google Gemini';
       case AiProvider.openAi:
         return 'OpenAI';
-      case AiProvider.custom:
-        return 'OpenAI-compatible API';
     }
   }
 
@@ -44,8 +43,10 @@ class AiProviderConfig {
     return AiProviderConfig(
       provider: provider,
       apiKey: json['apiKey'] as String? ?? '',
-      model: json['model'] as String? ?? defaultModel(provider),
-      endpoint: json['endpoint'] as String? ?? defaultEndpoint(provider),
+      model: models(provider).contains(json['model'])
+          ? json['model'] as String
+          : defaultModel(provider),
+      endpoint: defaultEndpoint(provider),
     );
   }
 
@@ -54,9 +55,24 @@ class AiProviderConfig {
       case AiProvider.gemini:
         return 'gemini-3.1-flash-lite-preview';
       case AiProvider.openAi:
-        return 'gpt-4o-mini';
-      case AiProvider.custom:
-        return 'your-model';
+        return 'gpt-5-mini';
+    }
+  }
+
+  static List<String> models(AiProvider provider) {
+    switch (provider) {
+      case AiProvider.gemini:
+        return [
+          'gemini-3.1-flash-lite-preview',
+          'gemini-3-flash-preview',
+          'gemini-3.1-pro-preview',
+        ];
+      case AiProvider.openAi:
+        return [
+          'gpt-5-mini',
+          'gpt-5',
+          'gpt-4.1',
+        ];
     }
   }
 
@@ -65,7 +81,6 @@ class AiProviderConfig {
       case AiProvider.gemini:
         return 'https://generativelanguage.googleapis.com/v1beta/models';
       case AiProvider.openAi:
-      case AiProvider.custom:
         return 'https://api.openai.com/v1/chat/completions';
     }
   }
@@ -76,6 +91,24 @@ class AiProviderService {
   static const _checkInPrefix = 'aidhd_check_in_';
 
   Future<AiProviderConfig?> getConfig(String userId) async {
+    try {
+      final document = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      final remote = document.data()?['aiProviderConfig'];
+      if (remote is Map) {
+        final config =
+            AiProviderConfig.fromJson(Map<String, dynamic>.from(remote));
+        if (config.apiKey.trim().isNotEmpty) {
+          await _saveLocal(userId, config);
+          return config;
+        }
+      }
+    } on FirebaseException {
+      // Fall back to the local cache when the network is unavailable.
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('$_configPrefix$userId');
     if (raw == null) return null;
@@ -89,6 +122,18 @@ class AiProviderService {
   }
 
   Future<void> saveConfig(String userId, AiProviderConfig config) async {
+    await _saveLocal(userId, config);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(userId).set(
+        {'aiProviderConfig': config.toJson()},
+        SetOptions(merge: true),
+      );
+    } on FirebaseException {
+      // The local cache keeps the provider usable until Firestore recovers.
+    }
+  }
+
+  Future<void> _saveLocal(String userId, AiProviderConfig config) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('$_configPrefix$userId', jsonEncode(config.toJson()));
   }

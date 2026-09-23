@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'providers/app_provider.dart';
 import 'app.dart';
 import 'firebase_options.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,7 +22,13 @@ void main() async {
   );
 
   final provider = AppProvider();
+  NotificationService.onNotificationTap = provider.openNotificationPrompt;
+  final launchPrompt = await NotificationService.initialize();
   await provider.init(); // Load accessibility settings from storage
+  if (provider.currentUser != null) {
+    await NotificationService.scheduleDailyReminders();
+  }
+  if (launchPrompt != null) provider.openNotificationPrompt(launchPrompt);
 
   runApp(
     ChangeNotifierProvider.value(

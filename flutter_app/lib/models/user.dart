@@ -9,6 +9,13 @@ class User {
   final String createdAt;
   final int? initialAssessmentScore;
   final String? initialAssessmentCategory;
+  final String supportStyle;
+  final String focusWindow;
+  final String reminderPreference;
+  final String averageSleepTime;
+  final String sleepDuration;
+  final String dietPattern;
+  final String physicalActivity;
 
   const User({
     required this.id,
@@ -21,6 +28,13 @@ class User {
     required this.createdAt,
     this.initialAssessmentScore,
     this.initialAssessmentCategory,
+    this.supportStyle = 'Gentle and encouraging',
+    this.focusWindow = 'Not sure yet',
+    this.reminderPreference = 'A few gentle reminders',
+    this.averageSleepTime = 'Not set',
+    this.sleepDuration = 'Not set',
+    this.dietPattern = 'Not set',
+    this.physicalActivity = 'Not set',
   });
 
   User copyWith({
@@ -30,6 +44,13 @@ class User {
     String? gender,
     int? initialAssessmentScore,
     String? initialAssessmentCategory,
+    String? supportStyle,
+    String? focusWindow,
+    String? reminderPreference,
+    String? averageSleepTime,
+    String? sleepDuration,
+    String? dietPattern,
+    String? physicalActivity,
   }) =>
       User(
         id: id,
@@ -44,6 +65,13 @@ class User {
             initialAssessmentScore ?? this.initialAssessmentScore,
         initialAssessmentCategory:
             initialAssessmentCategory ?? this.initialAssessmentCategory,
+        supportStyle: supportStyle ?? this.supportStyle,
+        focusWindow: focusWindow ?? this.focusWindow,
+        reminderPreference: reminderPreference ?? this.reminderPreference,
+        averageSleepTime: averageSleepTime ?? this.averageSleepTime,
+        sleepDuration: sleepDuration ?? this.sleepDuration,
+        dietPattern: dietPattern ?? this.dietPattern,
+        physicalActivity: physicalActivity ?? this.physicalActivity,
       );
 
   factory User.fromJson(Map<String, dynamic> j) => User(
@@ -57,6 +85,14 @@ class User {
         createdAt: j['createdAt'] as String,
         initialAssessmentScore: j['initialAssessmentScore'] as int?,
         initialAssessmentCategory: j['initialAssessmentCategory'] as String?,
+        supportStyle: j['supportStyle'] as String? ?? 'Gentle and encouraging',
+        focusWindow: j['focusWindow'] as String? ?? 'Not sure yet',
+        reminderPreference:
+            j['reminderPreference'] as String? ?? 'A few gentle reminders',
+        averageSleepTime: j['averageSleepTime'] as String? ?? 'Not set',
+        sleepDuration: j['sleepDuration'] as String? ?? 'Not set',
+        dietPattern: j['dietPattern'] as String? ?? 'Not set',
+        physicalActivity: j['physicalActivity'] as String? ?? 'Not set',
       );
 
   Map<String, dynamic> toJson() => {
@@ -70,5 +106,12 @@ class User {
         'createdAt': createdAt,
         'initialAssessmentScore': initialAssessmentScore,
         'initialAssessmentCategory': initialAssessmentCategory,
+        'supportStyle': supportStyle,
+        'focusWindow': focusWindow,
+        'reminderPreference': reminderPreference,
+        'averageSleepTime': averageSleepTime,
+        'sleepDuration': sleepDuration,
+        'dietPattern': dietPattern,
+        'physicalActivity': physicalActivity,
       };
 }
