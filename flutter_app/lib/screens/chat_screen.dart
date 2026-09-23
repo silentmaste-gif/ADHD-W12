@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../models/task.dart';
 import '../services/chat_service.dart';
 import '../services/ai_provider_service.dart';
 import '../services/gemini_service.dart';
@@ -17,6 +18,13 @@ class _Message {
       required this.isUser,
       required this.text,
       required this.time});
+}
+
+class _TaskIntent {
+  final String title;
+  final DateTime? dueAt;
+
+  const _TaskIntent({required this.title, this.dueAt});
 }
 
 class ChatScreen extends StatefulWidget {
@@ -38,7 +46,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = true;
 
   static const _systemPrompt = '''
-You are the AIDHD support assistant.
+You are the AiDHD support assistant.
 
 Only discuss ADHD-related focus, routines, organization, study strategies,
 emotional regulation, mental-health-adjacent wellbeing support, and general
@@ -48,7 +56,7 @@ that you are focused on ADHD and wellbeing support and invite the user to
 connect the question to focus, stress, planning, or learning habits. Do not
 solve unrelated problems.
 
-You are AIDHD, a present and emotionally attuned support companion, not a
+You are AiDHD, a present and emotionally attuned support companion, not a
 generic question-answering chatbot. Start conversations yourself. Before
 asking anything, acknowledge the person's humanity and emotional load, offer
 comfort, and show that you understood the context. Do not use a string of
@@ -115,14 +123,14 @@ diagnosis.
               await _generateOpeningMessage(app, event: pendingEvent);
           await _addAssistantMessage(userId, checkIn, prefix: 'event');
           app.notifyCompanion(
-              'Your AIDHD companion has started a new check-in.');
+              'Your AiDHD companion has started a new check-in.');
           app.clearPendingCompanionEvent();
         } else if (_aiConfig != null &&
             await _providerService.needsDailyCheckIn(userId)) {
           final checkIn = await _generateOpeningMessage(app);
           await _addAssistantMessage(userId, checkIn, prefix: 'checkin');
           app.notifyCompanion(
-              'Your AIDHD companion has a gentle check-in for you.');
+              'Your AiDHD companion has a gentle check-in for you.');
           await _providerService.markDailyCheckIn(userId);
         }
       } else {
@@ -306,7 +314,7 @@ diagnosis.
     if (event != null && mounted) {
       final opening = await _generateOpeningMessage(app, event: event);
       await _addAssistantMessage(userId, opening, prefix: 'event');
-      app.notifyCompanion('Your AIDHD companion has started a new check-in.');
+      app.notifyCompanion('Your AiDHD companion has started a new check-in.');
       app.clearPendingCompanionEvent();
     }
     return config;
@@ -382,12 +390,62 @@ ${jsonEncode(app.buildAiContext())}
     }
   }
 
+  Future<_TaskIntent?> _captureTaskIntent(AppProvider app, String text) async {
+    final match = RegExp(
+      r"^(?:remind me to|remember to|don't let me forget to|todo:\s*|add to my task list:\s*)(.+)$",
+      caseSensitive: false,
+    ).firstMatch(text.trim());
+    final rawTitle = match?.group(1)?.trim();
+    if (rawTitle == null || rawTitle.isEmpty || rawTitle.length > 160) {
+      return null;
+    }
+
+    final dayMatch = RegExp(r'\b(today|tomorrow)\b', caseSensitive: false)
+        .firstMatch(rawTitle);
+    final timeMatch = RegExp(r'\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b',
+            caseSensitive: false)
+        .firstMatch(rawTitle);
+    final cleanTitle = rawTitle
+        .replaceAll(RegExp(r'\b(today|tomorrow)\b', caseSensitive: false), '')
+        .replaceAll(
+            RegExp(r'\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b',
+                caseSensitive: false),
+            '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    DateTime? dueAt;
+    if (dayMatch != null || timeMatch != null) {
+      final now = DateTime.now();
+      var hour = timeMatch == null ? 9 : int.parse(timeMatch.group(1)!);
+      final minute =
+          timeMatch == null ? 0 : int.tryParse(timeMatch.group(2) ?? '0') ?? 0;
+      final meridiem = timeMatch?.group(3)?.toLowerCase();
+      if (meridiem == 'pm' && hour < 12) hour += 12;
+      if (meridiem == 'am' && hour == 12) hour = 0;
+      dueAt = DateTime(now.year, now.month, now.day, hour, minute);
+      if (dayMatch?.group(1)?.toLowerCase() == 'tomorrow' ||
+          (dayMatch == null && dueAt.isBefore(now))) {
+        dueAt = dueAt.add(const Duration(days: 1));
+      }
+    }
+    if (cleanTitle.isEmpty) return null;
+    final intent = _TaskIntent(title: cleanTitle, dueAt: dueAt);
+    await app.addTask(
+      title: intent.title,
+      kind: TaskKind.task,
+      dueAt: intent.dueAt,
+      reminderAt: intent.dueAt,
+    );
+    return intent;
+  }
+
   Future<void> _send() async {
     final text = _ctrl.text.trim();
     if (text.isEmpty || _isTyping || _isLoading) return;
     final app = context.read<AppProvider>();
     final userId = app.currentUser?.id;
     if (userId == null) return;
+    final capturedTask = await _captureTaskIntent(app, text);
     if (_aiConfig == null) {
       _aiConfig = await _ensureAiConfig();
       if (_aiConfig == null) return;
@@ -409,6 +467,8 @@ ${jsonEncode(app.buildAiContext())}
     try {
       final prompt = '''User profile and support context:
     ${jsonEncode(app.buildAiContext())}
+
+    ${capturedTask == null ? '' : 'The user just saved this task: "${capturedTask.title}". Acknowledge it briefly and help them choose the next small step.'}
 
     User message:
     $text''';
@@ -496,7 +556,7 @@ ${jsonEncode(app.buildAiContext())}
             icon: const Icon(Icons.arrow_back_ios, size: 18),
             onPressed: () => app.navigate(AppScreen.home)),
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('AIDHD Assistant',
+          const Text('AiDHD Assistant',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
           Row(children: [
             Container(

@@ -6,11 +6,11 @@ import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 
 const _moods = [
-  (MoodLabel.happy, '😊', Color(0xFFCEEACB)),
-  (MoodLabel.okay, '🙂', Color(0xFFFEF9C3)),
-  (MoodLabel.sad, '😢', Color(0xFFFFDAD6)),
-  (MoodLabel.stressed, '😰', Color(0xFFFFEDD5)),
-  (MoodLabel.overwhelmed, '😩', Color(0xFFCBE9E0)),
+  (MoodLabel.happy, 'assets/mood_face_1.png', Color(0xFFCEEACB)),
+  (MoodLabel.okay, 'assets/mood_face_2.png', Color(0xFFFEF9C3)),
+  (MoodLabel.sad, 'assets/mood_face_3.png', Color(0xFFFFDAD6)),
+  (MoodLabel.stressed, 'assets/mood_face_4.png', Color(0xFFFFEDD5)),
+  (MoodLabel.overwhelmed, 'assets/mood_face_5.png', Color(0xFFCBE9E0)),
 ];
 
 class HomeScreen extends StatelessWidget {
@@ -77,6 +77,13 @@ class HomeScreen extends StatelessWidget {
                       ]),
                     ),
 
+                    // Mood check-in stays close to the welcome header.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _MoodPanel(app: app),
+                    ),
+                    const SizedBox(height: 16),
+
                     // Chat + daily assessment
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -96,89 +103,98 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ]),
                     ),
-                    const SizedBox(height: 24),
-
-                    // Daily Mood
+                    const SizedBox(height: 12),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(children: [
-                        const Text('Daily Mood Management',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textDark),
-                            textAlign: TextAlign.center),
-                        const SizedBox(height: 4),
-                        const Text('How are you feeling today?',
-                            style: TextStyle(
-                                fontSize: 14, color: AppColors.textMid),
-                            textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 20),
+                      child: GestureDetector(
+                        onTap: () => app.navigate(AppScreen.today),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                              color: AppColors.mint,
-                              borderRadius: BorderRadius.circular(12)),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: _moods.map((m) {
-                              final (mood, emoji, color) = m;
-                              return GestureDetector(
-                                onTap: () {
-                                  app.setSelectedMood(mood);
-                                  app.navigate(AppScreen.moodCheckin);
-                                },
-                                child: Column(children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                        color: color, shape: BoxShape.circle),
-                                    child: Center(
-                                        child: Text(emoji,
-                                            style:
-                                                const TextStyle(fontSize: 22))),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(mood.displayName,
-                                      style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w500,
-                                          color: AppColors.textMid)),
-                                ]),
-                              );
-                            }).toList(),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color:
+                                    AppColors.border.withValues(alpha: 0.35)),
                           ),
+                          child: Row(children: [
+                            const Icon(Icons.checklist_outlined,
+                                color: AppColors.primary),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '${app.openTasks.length} open things in Today',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textDark),
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right,
+                                color: AppColors.textMid),
+                          ]),
                         ),
-                      ]),
+                      ),
                     ),
                     const SizedBox(height: 24),
 
-                    // Initial answers and personalized guidance
+                    // Initial check-in summary
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(children: [
-                        Expanded(
-                          child: _InitialSummaryCard(
-                            title: 'Initial Screening',
-                            icon: Icons.assignment_outlined,
-                            value: app.currentUser?.initialAssessmentCategory ??
-                                'Not completed',
+                      child: GestureDetector(
+                        onTap: () => app.navigate(AppScreen.initialAssessment),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color:
+                                    AppColors.border.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.mint,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.assignment_outlined,
+                                    color: AppColors.primary),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Initial Assessment',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textDark),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      app.currentUser
+                                              ?.initialAssessmentCategory ??
+                                          'Not completed',
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textMid),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right,
+                                  color: AppColors.textMid),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _InitialSummaryCard(
-                            title: 'Initial Routine',
-                            icon: Icons.schedule_outlined,
-                            value:
-                                app.currentUser?.averageSleepTime == 'Not set'
-                                    ? 'Not completed'
-                                    : app.currentUser!.averageSleepTime,
-                          ),
-                        ),
-                      ]),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Padding(
@@ -236,12 +252,22 @@ class HomeScreen extends StatelessWidget {
                                             shape: BoxShape.circle,
                                           ),
                                           child: Center(
-                                              child: Text(
-                                                  e.type == EntryType.mood
-                                                      ? (e.mood?.emoji ?? '😊')
-                                                      : '📋',
-                                                  style: const TextStyle(
-                                                      fontSize: 18))),
+                                            child: e.type == EntryType.mood &&
+                                                    e.mood != null
+                                                ? ClipOval(
+                                                    child: Image.asset(
+                                                      e.mood!.assetPath,
+                                                      width: 40,
+                                                      height: 40,
+                                                      fit: BoxFit.cover,
+                                                    ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.assignment_outlined,
+                                                    size: 19,
+                                                    color: AppColors.primary,
+                                                  ),
+                                          ),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
@@ -280,6 +306,81 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MoodPanel extends StatelessWidget {
+  final AppProvider app;
+
+  const _MoodPanel({required this.app});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.07),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('How are you feeling today?',
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textDark)),
+            const SizedBox(height: 4),
+            const Text('Choose a starting point for your check-in.',
+                style: TextStyle(fontSize: 12, color: AppColors.textMid)),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: _moods.map((moodData) {
+                final (mood, assetPath, color) = moodData;
+                return InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () {
+                    app.setSelectedMood(mood);
+                    app.navigate(AppScreen.moodCheckin);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.asset(assetPath, fit: BoxFit.cover),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(mood.displayName,
+                            style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMid)),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      );
 }
 
 class _ActionCard extends StatelessWidget {
@@ -329,46 +430,6 @@ class _ActionCard extends StatelessWidget {
                   ]),
             ),
           ),
-        ),
-      );
-}
-
-class _InitialSummaryCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final String value;
-
-  const _InitialSummaryCard({
-    required this.title,
-    required this.icon,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(minHeight: 122),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border.withValues(alpha: 0.35)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: AppColors.primary, size: 22),
-            const SizedBox(height: 8),
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textDark)),
-            const SizedBox(height: 4),
-            Text(value,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: AppColors.textMid)),
-          ],
         ),
       );
 }

@@ -6,6 +6,7 @@ class User {
   final String passwordHash;
   final String age;
   final String gender;
+  final String avatarId;
   final String createdAt;
   final int? initialAssessmentScore;
   final String? initialAssessmentCategory;
@@ -25,6 +26,7 @@ class User {
     required this.passwordHash,
     this.age = '',
     this.gender = 'Prefer not to say',
+    this.avatarId = 'avatar_1',
     required this.createdAt,
     this.initialAssessmentScore,
     this.initialAssessmentCategory,
@@ -42,6 +44,7 @@ class User {
     String? email,
     String? age,
     String? gender,
+    String? avatarId,
     int? initialAssessmentScore,
     String? initialAssessmentCategory,
     String? supportStyle,
@@ -60,6 +63,7 @@ class User {
         passwordHash: passwordHash,
         age: age ?? this.age,
         gender: gender ?? this.gender,
+        avatarId: avatarId ?? this.avatarId,
         createdAt: createdAt,
         initialAssessmentScore:
             initialAssessmentScore ?? this.initialAssessmentScore,
@@ -82,6 +86,7 @@ class User {
         passwordHash: j['passwordHash'] as String,
         age: j['age'] as String? ?? '',
         gender: j['gender'] as String? ?? 'Prefer not to say',
+        avatarId: j['avatarId'] as String? ?? 'avatar_1',
         createdAt: j['createdAt'] as String,
         initialAssessmentScore: j['initialAssessmentScore'] as int?,
         initialAssessmentCategory: j['initialAssessmentCategory'] as String?,
@@ -103,6 +108,7 @@ class User {
         'passwordHash': passwordHash,
         'age': age,
         'gender': gender,
+        'avatarId': avatarId,
         'createdAt': createdAt,
         'initialAssessmentScore': initialAssessmentScore,
         'initialAssessmentCategory': initialAssessmentCategory,

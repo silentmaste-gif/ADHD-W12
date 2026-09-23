@@ -10,6 +10,7 @@ import 'screens/chat_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/remaining_screens.dart';
+import 'screens/today_screen.dart';
 
 class AidhdApp extends StatelessWidget {
   const AidhdApp({super.key});
@@ -19,7 +20,7 @@ class AidhdApp extends StatelessWidget {
     final app = context.watch<AppProvider>();
 
     return MaterialApp(
-      title: 'AIDHD',
+      title: 'AiDHD',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       home: _Router(screen: app.screen),
@@ -68,6 +69,8 @@ class _Router extends StatelessWidget {
         return const HelpSupportScreen();
       case AppScreen.preferencesAssessment:
         return const PreferencesAssessmentScreen();
+      case AppScreen.today:
+        return const TodayScreen();
     }
   }
 }

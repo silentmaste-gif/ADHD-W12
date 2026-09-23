@@ -2,11 +2,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/history_entry.dart';
+import '../models/task.dart';
 import '../models/accessibility_settings.dart';
 import '../services/auth_service.dart';
 import '../services/history_service.dart';
 import '../services/accessibility_service.dart';
 import '../services/notification_service.dart';
+import '../services/task_service.dart';
 
 enum AppScreen {
   login,
@@ -26,16 +28,19 @@ enum AppScreen {
   privacyPolicy,
   helpSupport,
   preferencesAssessment,
+  today,
 }
 
 class AppProvider extends ChangeNotifier {
   final _auth = AuthService();
   final _historyService = HistoryService();
   final _accessibilityService = AccessibilityService();
+  final _taskService = TaskService();
 
   AppScreen _screen = AppScreen.login;
   User? _currentUser;
   List<HistoryEntry> _history = [];
+  List<TaskItem> _tasks = [];
   String? _error;
   bool _loading = false;
 
@@ -54,6 +59,9 @@ class AppProvider extends ChangeNotifier {
   AppScreen get screen => _screen;
   User? get currentUser => _currentUser;
   List<HistoryEntry> get history => _history;
+  List<TaskItem> get tasks => List.unmodifiable(_tasks);
+  List<TaskItem> get openTasks =>
+      _tasks.where((task) => !task.completed).toList(growable: false);
   String? get error => _error;
   bool get loading => _loading;
   int? get assessmentScore => _assessmentScore;
@@ -73,6 +81,8 @@ class AppProvider extends ChangeNotifier {
       if (sessionUser != null) {
         _currentUser = sessionUser;
         _history = await _historyService.getHistory(sessionUser.id);
+        _tasks = await _taskService.getTasks(sessionUser.id);
+        await _scheduleTaskReminders();
         _screen = sessionUser.initialAssessmentScore == null
             ? AppScreen.initialAssessment
             : AppScreen.home;
@@ -117,6 +127,8 @@ class AppProvider extends ChangeNotifier {
     if (result.ok) {
       _currentUser = result.user!;
       _history = await _historyService.getHistory(_currentUser!.id);
+      _tasks = await _taskService.getTasks(_currentUser!.id);
+      await _scheduleTaskReminders();
       await NotificationService.scheduleDailyReminders();
       _screen = _pendingCompanionEvent != null
           ? AppScreen.chat
@@ -145,6 +157,7 @@ class AppProvider extends ChangeNotifier {
     if (result.ok) {
       _currentUser = result.user!;
       _history = [];
+      _tasks = [];
       await NotificationService.scheduleDailyReminders();
       _screen = _pendingCompanionEvent != null
           ? AppScreen.chat
@@ -160,6 +173,7 @@ class AppProvider extends ChangeNotifier {
     await _auth.logout();
     _currentUser = null;
     _history = [];
+    _tasks = [];
     _assessmentScore = null;
     _assessmentCategory = null;
     _selectedMood = null;
@@ -170,10 +184,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> updateProfile(
-      {String? name, String? age, String? gender}) async {
+      {String? name, String? age, String? gender, String? avatarId}) async {
     if (_currentUser == null) return;
     final updated = await _auth.updateUser(_currentUser!.id,
-        name: name, age: age, gender: gender);
+        name: name, age: age, gender: gender, avatarId: avatarId);
     if (updated != null) {
       _currentUser = updated;
       notifyListeners();
@@ -259,6 +273,129 @@ class AppProvider extends ChangeNotifier {
     _pendingCompanionEvent = null;
   }
 
+  Future<void> addTask({
+    required String title,
+    String? notes,
+    TaskKind kind = TaskKind.task,
+    TaskPriority priority = TaskPriority.normal,
+    DateTime? dueAt,
+    String? recurrence,
+    DateTime? reminderAt,
+    int? focusMinutes,
+  }) async {
+    final userId = _currentUser?.id;
+    if (userId == null || title.trim().isEmpty) return;
+    final task = TaskItem(
+      id: 'task_${DateTime.now().microsecondsSinceEpoch}',
+      title: title.trim(),
+      notes: notes,
+      kind: kind,
+      priority: priority,
+      dueAt: dueAt,
+      recurrence: recurrence,
+      reminderAt: reminderAt,
+      focusMinutes: focusMinutes,
+      createdAt: DateTime.now(),
+    );
+    await _taskService.saveTask(userId, task);
+    await NotificationService.scheduleTaskReminder(task);
+    _tasks = [task, ..._tasks];
+    notifyListeners();
+  }
+
+  Future<void> _scheduleTaskReminders() async {
+    for (final task in _tasks) {
+      await NotificationService.scheduleTaskReminder(task);
+    }
+  }
+
+  Future<void> toggleTask(TaskItem task) async {
+    final userId = _currentUser?.id;
+    if (userId == null) return;
+    final completed = !task.completed;
+    await _taskService.setCompleted(userId, task, completed);
+    await _taskService.recordCompletion(userId, task, completed);
+    if (completed) {
+      await NotificationService.cancelTaskReminder(task);
+    } else {
+      await NotificationService.scheduleTaskReminder(task);
+    }
+    _tasks = [
+      for (final item in _tasks)
+        if (item.id == task.id)
+          item.copyWith(
+            completed: completed,
+            completedAt: completed ? DateTime.now() : null,
+          )
+        else
+          item,
+    ];
+    notifyListeners();
+
+    if (completed && task.recurrence != null) {
+      final nextDueAt = _nextOccurrence(task.dueAt, task.recurrence!);
+      if (nextDueAt != null) {
+        final nextTask = TaskItem(
+          id: 'task_${DateTime.now().microsecondsSinceEpoch}',
+          title: task.title,
+          notes: task.notes,
+          kind: task.kind,
+          priority: task.priority,
+          dueAt: nextDueAt,
+          recurrence: task.recurrence,
+          reminderAt: task.reminderAt == null || task.dueAt == null
+              ? null
+              : nextDueAt.subtract(task.dueAt!.difference(task.reminderAt!)),
+          focusMinutes: task.focusMinutes,
+          createdAt: DateTime.now(),
+        );
+        await _taskService.saveTask(userId, nextTask);
+        await NotificationService.scheduleTaskReminder(nextTask);
+        _tasks = [nextTask, ..._tasks];
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> deleteTask(TaskItem task) async {
+    final userId = _currentUser?.id;
+    if (userId == null) return;
+    await _taskService.deleteTask(userId, task.id);
+    await NotificationService.cancelTaskReminder(task);
+    _tasks = _tasks.where((item) => item.id != task.id).toList();
+    notifyListeners();
+  }
+
+  Future<void> snoozeTask(TaskItem task, Duration duration) async {
+    final userId = _currentUser?.id;
+    if (userId == null || task.completed) return;
+    final until = DateTime.now().add(duration);
+    final updated = task.copyWith(reminderAt: until, snoozedUntil: until);
+    await _taskService.updateTask(userId, updated);
+    await NotificationService.cancelTaskReminder(task);
+    await NotificationService.scheduleTaskReminder(updated);
+    _tasks = [for (final item in _tasks) item.id == task.id ? updated : item];
+    notifyListeners();
+  }
+
+  DateTime? _nextOccurrence(DateTime? dueAt, String recurrence) {
+    if (dueAt == null) return null;
+    switch (recurrence) {
+      case 'daily':
+        return dueAt.add(const Duration(days: 1));
+      case 'weekdays':
+        var next = dueAt.add(const Duration(days: 1));
+        while (next.weekday > DateTime.friday) {
+          next = next.add(const Duration(days: 1));
+        }
+        return next;
+      case 'weekly':
+        return dueAt.add(const Duration(days: 7));
+      default:
+        return null;
+    }
+  }
+
   void openNotificationPrompt(String prompt) {
     if (prompt.trim().isEmpty) return;
     _pendingCompanionEvent = prompt.trim();
@@ -294,6 +431,7 @@ class AppProvider extends ChangeNotifier {
         'ageGroup': ageGroup,
         'isMinor': isMinor,
         'gender': _currentUser?.gender,
+        'avatarId': _currentUser?.avatarId,
         'initialAssessmentScore': _currentUser?.initialAssessmentScore,
         'initialAssessmentCategory': _currentUser?.initialAssessmentCategory,
         'supportPreferences': {
@@ -308,5 +446,6 @@ class AppProvider extends ChangeNotifier {
         'latestAssessmentScore': _assessmentScore,
         'latestAssessmentCategory': _assessmentCategory,
         'history': _history.map((e) => e.toJson()).toList(),
+        'openTasks': openTasks.map((task) => task.toJson()).toList(),
       };
 }

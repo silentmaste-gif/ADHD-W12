@@ -14,8 +14,10 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await FirebaseAppCheck.instance.activate(
-    providerWeb: kIsWeb ? WebDebugProvider() : null,
-    providerAndroid: const AndroidDebugProvider(),
+    providerWeb: kIsWeb && kDebugMode ? WebDebugProvider() : null,
+    providerAndroid: kDebugMode
+        ? const AndroidDebugProvider()
+        : const AndroidPlayIntegrityProvider(),
     providerWindows: const WindowsDebugProvider(
       debugToken: String.fromEnvironment('APP_CHECK_DEBUG_TOKEN'),
     ),

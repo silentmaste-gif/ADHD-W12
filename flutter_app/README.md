@@ -1,6 +1,6 @@
-# AIDHD — Flutter App
+# AiDHD — Flutter App
 
-Flutter/Dart version of the AIDHD app. Features login/register, ADHD likelihood screening, daily mood check-ins, daily assessments, history tracking, learn articles, and an AI chat placeholder ready for API integration.
+Flutter/Dart version of the AiDHD app. Features login/register, ADHD likelihood screening, daily mood check-ins, daily assessments, history tracking, learn articles, task reminders, local notifications, and AI chat integration.
 
 ---
 
@@ -12,11 +12,14 @@ flutter_app/
 │   ├── main.dart                      # Entry point
 │   ├── app.dart                       # Root widget + screen router
 │   ├── models/
-│   │   ├── user.dart                  # User model (matches React User interface)
-│   │   └── history_entry.dart         # HistoryEntry model
+│   │   ├── user.dart                  # User profile and avatar model
+│   │   ├── history_entry.dart         # HistoryEntry and mood model
+│   │   └── task.dart                  # Task and reminder model
 │   ├── services/
-│   │   ├── auth_service.dart          # Login/register (SharedPreferences → Supabase)
-│   │   └── history_service.dart       # Per-user history persistence
+│   │   ├── auth_service.dart           # Firebase Authentication and profiles
+│   │   ├── history_service.dart        # Per-user history persistence
+│   │   ├── task_service.dart           # Per-user Firestore task persistence
+│   │   └── notification_service.dart   # Device reminder notifications
 │   ├── providers/
 │   │   └── app_provider.dart          # Global state (Provider) + buildAiContext()
 │   ├── theme/
@@ -113,9 +116,35 @@ flutter run -d <device-id>
 
 ## Firebase backend
 
-The app currently uses local `SharedPreferences` storage so it runs without cloud credentials. Firebase migration instructions, Firestore structure, security rules, and the secure AI API architecture are in [FIREBASE_SETUP.md](FIREBASE_SETUP.md).
+The app uses Firebase Authentication and Firestore for user profiles, history,
+tasks, and completion records. Firebase migration instructions, Firestore
+structure, security rules, and the secure AI API architecture are in
+[FIREBASE_SETUP.md](FIREBASE_SETUP.md).
 
-All data access is isolated in `lib/services/`, so models, providers, and screens can remain unchanged while `AuthService`, `HistoryService`, and `AccessibilityService` are migrated.
+Keep private AI provider keys on the backend. Do not place them in Flutter code
+or distribute them in an APK.
+
+## Android beta release
+
+Install Android Studio and the Android SDK, then run `flutter doctor` and
+`flutter doctor --android-licenses`. Configure a private release keystore
+before publishing. The Android application ID is `com.silentmaste.aidhd` and
+the app label is `AiDHD`.
+
+```bash
+flutter clean
+flutter pub get
+flutter build apk --release
+```
+
+For Google Play, build an app bundle:
+
+```bash
+flutter build appbundle --release
+```
+
+Test notifications on a physical Android device, including permission,
+restart, reboot, and a future date/time reminder.
 
 ---
 

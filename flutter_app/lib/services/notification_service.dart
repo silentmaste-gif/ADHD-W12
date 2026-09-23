@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import '../models/task.dart';
 
 class NotificationPreferences {
   final bool assessment;
@@ -169,6 +170,9 @@ class NotificationService {
     await preferences.setBool(_tasksKey, values.tasks);
     await preferences.setBool(_soundKey, values.sound);
     await preferences.setBool(_vibrationKey, values.vibration);
+    if (!values.tasks) {
+      await _plugin.cancelAll();
+    }
     await scheduleDailyReminders(values);
   }
 
@@ -177,7 +181,9 @@ class NotificationService {
   ]) async {
     if (kIsWeb) return;
     final preferences = values ?? await loadPreferences();
-    await _plugin.cancelAll();
+    for (final reminder in _reminders) {
+      await _plugin.cancel(reminder.id);
+    }
     for (final reminder in _reminders) {
       if (reminder.enabled(preferences)) {
         await _scheduleDaily(reminder, preferences);
@@ -206,7 +212,7 @@ class NotificationService {
       NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
-          'AIDHD reminders',
+          'AiDHD reminders',
           channelDescription:
               'Gentle reminders for focus, routines, and daily care.',
           importance: Importance.defaultImportance,
@@ -225,5 +231,46 @@ class NotificationService {
 
   static Future<void> cancelAll() async {
     if (!kIsWeb) await _plugin.cancelAll();
+  }
+
+  static Future<void> scheduleTaskReminder(TaskItem task) async {
+    if (kIsWeb || task.completed || task.reminderAt == null) return;
+    final preferences = await loadPreferences();
+    if (!preferences.tasks) return;
+    final reminderAt = task.reminderAt!;
+    if (!reminderAt.isAfter(DateTime.now())) return;
+    await _plugin.zonedSchedule(
+      _taskNotificationId(task.id),
+      'AiDHD task reminder',
+      task.title,
+      tz.TZDateTime.from(reminderAt, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          'AiDHD reminders',
+          channelDescription: 'Gentle reminders for tasks and routines.',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          playSound: preferences.sound,
+          enableVibration: preferences.vibration,
+        ),
+        iOS: DarwinNotificationDetails(),
+        macOS: DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      payload: 'Help me with this reminder: ${task.title}',
+    );
+  }
+
+  static Future<void> cancelTaskReminder(TaskItem task) async {
+    if (!kIsWeb) await _plugin.cancel(_taskNotificationId(task.id));
+  }
+
+  static int _taskNotificationId(String id) {
+    var value = 17;
+    for (final codeUnit in id.codeUnits) {
+      value = (value * 31 + codeUnit) & 0x7fffffff;
+    }
+    return value;
   }
 }

@@ -34,3 +34,20 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brain_logo.png
+    - assets/avatar_1.png
+    - assets/avatar_2.png
+    - assets/avatar_3.png
+    - assets/avatar_4.png
+    - assets/avatar_5.png
+    - assets/avatar_6.png
+    - assets/avatar_7.png
+    - assets/avatar_8.png
+    - assets/avatar_9.png
+    - assets/avatar_10.png
+    - assets/avatar_11.png
+    - assets/avatar_12.png
+    - assets/mood_face_1.png
+    - assets/mood_face_2.png
+    - assets/mood_face_3.png
+    - assets/mood_face_4.png
+    - assets/mood_face_5.png

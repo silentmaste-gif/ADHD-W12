@@ -33,6 +33,21 @@ extension MoodLabelExt on MoodLabel {
     }
   }
 
+  String get assetPath {
+    switch (this) {
+      case MoodLabel.happy:
+        return 'assets/mood_face_1.png';
+      case MoodLabel.okay:
+        return 'assets/mood_face_2.png';
+      case MoodLabel.sad:
+        return 'assets/mood_face_3.png';
+      case MoodLabel.stressed:
+        return 'assets/mood_face_4.png';
+      case MoodLabel.overwhelmed:
+        return 'assets/mood_face_5.png';
+    }
+  }
+
   static MoodLabel? fromString(String? s) {
     if (s == null) return null;
     return MoodLabel.values.firstWhere(

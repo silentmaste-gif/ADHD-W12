@@ -32,6 +32,7 @@ class AuthService {
       passwordHash: '',
       age: data['age'] as String? ?? '',
       gender: data['gender'] as String? ?? 'Prefer not to say',
+      avatarId: data['avatarId'] as String? ?? 'avatar_1',
       createdAt: data['createdAt'] as String? ?? '',
       initialAssessmentScore: data['initialAssessmentScore'] as int?,
       initialAssessmentCategory: data['initialAssessmentCategory'] as String?,
@@ -89,6 +90,7 @@ class AuthService {
           'username': usernameKey,
           'age': age,
           'gender': 'Prefer not to say',
+          'avatarId': 'avatar_1',
           'createdAt': DateTime.now().toIso8601String(),
         });
         return AuthResult.success(
@@ -155,6 +157,7 @@ class AuthService {
       {String? name,
       String? age,
       String? gender,
+      String? avatarId,
       int? initialAssessmentScore,
       String? initialAssessmentCategory,
       String? supportStyle,
@@ -168,6 +171,7 @@ class AuthService {
     if (name != null) updates['name'] = name;
     if (age != null) updates['age'] = age;
     if (gender != null) updates['gender'] = gender;
+    if (avatarId != null) updates['avatarId'] = avatarId;
     if (initialAssessmentScore != null) {
       updates['initialAssessmentScore'] = initialAssessmentScore;
     }

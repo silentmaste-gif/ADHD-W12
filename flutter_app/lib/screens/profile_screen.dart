@@ -19,11 +19,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   static const _genderOptions = ['Male', 'Female', 'Prefer not to say'];
 
-  String? _avatarEmoji(String? gender) {
-    if (gender == 'Male') return '👨';
-    if (gender == 'Female') return '👩';
-    return null; // "Prefer not to say" → silhouette icon
-  }
+  static const _avatarOptions = {
+    'avatar_1': 'assets/avatar_1.png',
+    'avatar_2': 'assets/avatar_2.png',
+    'avatar_3': 'assets/avatar_3.png',
+    'avatar_4': 'assets/avatar_4.png',
+    'avatar_5': 'assets/avatar_5.png',
+    'avatar_6': 'assets/avatar_6.png',
+    'avatar_7': 'assets/avatar_7.png',
+    'avatar_8': 'assets/avatar_8.png',
+    'avatar_9': 'assets/avatar_9.png',
+    'avatar_10': 'assets/avatar_10.png',
+    'avatar_11': 'assets/avatar_11.png',
+    'avatar_12': 'assets/avatar_12.png',
+  };
 
   @override
   void initState() {
@@ -58,18 +67,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(24),
         child: Column(children: [
           // Avatar
-          Container(
-            width: 120,
-            height: 120,
-            decoration: const BoxDecoration(
-                color: Color(0xFFEADDFF), shape: BoxShape.circle),
-            child: Center(
-              child: _avatarEmoji(user?.gender) != null
-                  ? Text(_avatarEmoji(user?.gender)!,
-                      style: const TextStyle(fontSize: 56))
-                  : const Icon(Icons.person,
-                      size: 68, color: Color(0xFF7B61B4)),
-            ),
+          _AvatarPicker(
+            avatarId: user?.avatarId ?? 'avatar_1',
+            options: _avatarOptions,
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _showAvatarPicker(context, app, user?.avatarId),
+            icon: const Icon(Icons.face_retouching_natural_outlined),
+            label: const Text('Choose avatar'),
           ),
           const SizedBox(height: 8),
           Text(user?.name ?? '',
@@ -84,7 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Name
           _ProfileField(
-            icon: '👤',
+            icon: Icons.person_outline,
             label: 'Name',
             isEditing: _editingName,
             displayValue: user?.name ?? '',
@@ -99,7 +105,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Age
           _ProfileField(
-            icon: '🎂',
+            icon: Icons.cake_outlined,
             label: 'Age',
             isEditing: _editingAge,
             displayValue: age.isNotEmpty ? age : '—',
@@ -115,7 +121,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Email
           if (user != null)
-            _InfoField(icon: '✉️', label: 'Email', value: user.email),
+            _InfoField(
+                icon: Icons.mail_outline, label: 'Email', value: user.email),
           const SizedBox(height: 12),
 
           // Gender
@@ -127,7 +134,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 border: Border.all(color: AppColors.border)),
             child: Column(children: [
               Row(children: [
-                const _IconBadge('⚧'),
+                const _IconBadge(Icons.person_search_outlined),
                 const SizedBox(width: 12),
                 Expanded(
                     child: Column(
@@ -238,10 +245,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
+  Future<void> _showAvatarPicker(
+      BuildContext context, AppProvider app, String? selectedAvatar) async {
+    final avatarId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Choose avatar'),
+        content: Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: _avatarOptions.entries.map((entry) {
+            final selected = entry.key == (selectedAvatar ?? 'avatar_1');
+            return InkWell(
+              borderRadius: BorderRadius.circular(28),
+              onTap: () => Navigator.pop(dialogContext, entry.key),
+              child: Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected ? AppColors.primary : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                child: ClipOval(
+                  child: Image.asset(entry.value,
+                      width: 52, height: 52, fit: BoxFit.cover),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (avatarId != null) await app.updateProfile(avatarId: avatarId);
+  }
 }
 
 class _ProfileField extends StatelessWidget {
-  final String icon;
+  final IconData icon;
   final String label;
   final bool isEditing;
   final String displayValue;
@@ -303,7 +354,7 @@ class _ProfileField extends StatelessWidget {
 }
 
 class _InfoField extends StatelessWidget {
-  final String icon;
+  final IconData icon;
   final String label;
   final String value;
   const _InfoField(
@@ -338,14 +389,51 @@ class _InfoField extends StatelessWidget {
 }
 
 class _IconBadge extends StatelessWidget {
-  final String emoji;
-  const _IconBadge(this.emoji);
+  final IconData icon;
+  const _IconBadge(this.icon);
   @override
   Widget build(BuildContext context) => Container(
         width: 40,
         height: 40,
         decoration: const BoxDecoration(
             color: Color(0xFFECEEEC), shape: BoxShape.circle),
-        child: Center(child: Text(emoji, style: const TextStyle(fontSize: 18))),
+        child: Center(child: Icon(icon, size: 19, color: AppColors.primary)),
       );
+}
+
+class _AvatarPicker extends StatelessWidget {
+  final String avatarId;
+  final Map<String, String> options;
+
+  const _AvatarPicker({
+    required this.avatarId,
+    required this.options,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = options[avatarId] ?? options.values.first;
+    return Column(
+      children: [
+        Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.18),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8)),
+            ],
+          ),
+          child: ClipOval(
+            child: Image.asset(selected,
+                width: 120, height: 120, fit: BoxFit.cover),
+          ),
+        ),
+      ],
+    );
+  }
 }

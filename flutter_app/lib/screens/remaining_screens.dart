@@ -159,11 +159,14 @@ class _EntryCardState extends State<_EntryCard> {
                 shape: BoxShape.circle,
               ),
               child: Center(
-                  child: Text(
-                      entry.type == EntryType.mood
-                          ? (entry.mood?.emoji ?? '😊')
-                          : '📋',
-                      style: const TextStyle(fontSize: 20))),
+                child: entry.type == EntryType.mood && entry.mood != null
+                    ? ClipOval(
+                        child: Image.asset(entry.mood!.assetPath,
+                            width: 30, height: 30, fit: BoxFit.cover),
+                      )
+                    : const Icon(Icons.assignment_outlined,
+                        color: AppColors.primary, size: 20),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -272,7 +275,10 @@ class _MoodCheckinScreenState extends State<MoodCheckinScreen> {
                 border:
                     Border.all(color: AppColors.border.withValues(alpha: 0.3))),
             child: Column(children: [
-              Text(mood.emoji, style: const TextStyle(fontSize: 64)),
+              ClipOval(
+                child: Image.asset(mood.assetPath,
+                    width: 112, height: 112, fit: BoxFit.cover),
+              ),
               const SizedBox(height: 8),
               Text('You feel ${mood.displayName}',
                   style: const TextStyle(
@@ -1210,7 +1216,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
     ),
     (
       'How We Use Your Information',
-      'Your information is used exclusively to personalize your AIDHD experience, track your progress over time, provide relevant tips and resources, and improve the app. We do not sell your data to third parties.'
+      'Your information is used exclusively to personalize your AiDHD experience, track your progress over time, provide relevant tips and resources, and improve the app. We do not sell your data to third parties.'
     ),
     (
       'Data Storage & Security',
@@ -1281,8 +1287,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
 
   static const _faqs = [
     (
-      'What is AIDHD?',
-      'AIDHD is an AI-powered support app designed to help people with ADHD manage their daily routines, track their mood, and access educational resources.'
+      'What is AiDHD?',
+      'AiDHD is an AI-powered support app designed to help people with ADHD manage their daily routines, track their mood, and access educational resources.'
     ),
     (
       'Is my data private?',
@@ -1290,7 +1296,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     ),
     (
       'How do I log my mood?',
-      'From the Home screen, tap one of the mood emoji buttons. You can add a note and tag activities before saving.'
+      'From the Home screen, tap one of the mood buttons. You can add a note and tag activities before saving.'
     ),
     (
       'What does the Daily Assessment measure?',

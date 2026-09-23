@@ -56,6 +56,7 @@ class _InitialAssessmentScreenState extends State<InitialAssessmentScreen> {
   int _current = 0;
   final List<int> _answers = [];
   bool _saving = false;
+  bool _editingAssessment = false;
 
   int get _score => _answers.fold(0, (a, b) => a + b);
 
@@ -69,7 +70,12 @@ class _InitialAssessmentScreenState extends State<InitialAssessmentScreen> {
       setState(() => _saving = true);
       try {
         await app.saveInitialAssessment(_score, res['label'] as String);
-        if (mounted) setState(() => _step = 2);
+        if (mounted) {
+          setState(() {
+            _editingAssessment = false;
+            _step = 2;
+          });
+        }
       } catch (_) {
         _answers.removeLast();
         if (mounted) {
@@ -88,9 +94,162 @@ class _InitialAssessmentScreenState extends State<InitialAssessmentScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppProvider>();
+    final user = app.currentUser;
+    final hasSavedAssessment =
+        user != null && user.initialAssessmentScore != null;
+    if (hasSavedAssessment && !_editingAssessment && _step == 0) {
+      return _buildReview(app);
+    }
     if (_step == 0) return _buildIntro(app);
     if (_step == 2) return _buildResult(app);
     return _buildQuestion(app);
+  }
+
+  Widget _buildReview(AppProvider app) {
+    final user = app.currentUser!;
+    final routineDetails = [
+      if (user.averageSleepTime != 'Not set') 'Sleep: ${user.averageSleepTime}',
+      if (user.sleepDuration != 'Not set') 'Duration: ${user.sleepDuration}',
+      if (user.dietPattern != 'Not set') 'Meals: ${user.dietPattern}',
+      if (user.physicalActivity != 'Not set')
+        'Activity: ${user.physicalActivity}',
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.mint,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 18),
+          onPressed: () => app.navigate(AppScreen.home),
+        ),
+        title: const Text('Your Initial Check-In'),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: AppColors.border.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.assignment_rounded,
+                            color: AppColors.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            user.initialAssessmentCategory ??
+                                'Screening not completed',
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textDark),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      user.initialAssessmentScore != null
+                          ? 'Score: ${user.initialAssessmentScore} / ${_questions.length * 4}'
+                          : 'No screening score saved yet',
+                      style: const TextStyle(
+                          fontSize: 14, color: AppColors.textMid, height: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppColors.mint,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.schedule_outlined, color: AppColors.primary),
+                        SizedBox(width: 10),
+                        Text(
+                          'Your routine snapshot',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textDark),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (routineDetails.isEmpty)
+                      const Text(
+                        'No routine answers saved yet.',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textMid,
+                            height: 1.5),
+                      )
+                    else
+                      ...routineDetails.map(
+                        (detail) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            detail,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textDark,
+                                height: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _answers.clear();
+                      _current = 0;
+                      _step = 1;
+                      _editingAssessment = true;
+                    });
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Change initial assessment'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => app.navigate(AppScreen.initialRoutine),
+                  icon: const Icon(Icons.schedule_outlined),
+                  label: const Text('Change routine'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildIntro(AppProvider app) => Scaffold(
@@ -117,7 +276,7 @@ class _InitialAssessmentScreenState extends State<InitialAssessmentScreen> {
                   textAlign: TextAlign.center),
               const SizedBox(height: 12),
               const Text(
-                  'Before you get started, let\'s learn a little about your experience. This short screening takes about 2 minutes and helps personalize your AIDHD journey.',
+                  'Before you get started, let\'s learn a little about your experience. This short screening takes about 2 minutes and helps personalize your AiDHD journey.',
                   style: TextStyle(
                       fontSize: 14, color: AppColors.textMid, height: 1.6),
                   textAlign: TextAlign.center),
@@ -131,17 +290,20 @@ class _InitialAssessmentScreenState extends State<InitialAssessmentScreen> {
                         color: AppColors.border.withValues(alpha: 0.3))),
                 child: Column(children: [
                   for (final item in [
-                    ('📋', '10 quick questions about your everyday experience'),
-                    ('⏱️', 'Takes about 2 minutes to complete'),
                     (
-                      '🔒',
+                      Icons.assignment_outlined,
+                      '10 quick questions about your everyday experience'
+                    ),
+                    (Icons.timer_outlined, 'Takes about 2 minutes to complete'),
+                    (
+                      Icons.lock_outline,
                       'Your answers are private and stored securely with your account'
                     ),
                   ])
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(children: [
-                        Text(item.$1, style: const TextStyle(fontSize: 22)),
+                        Icon(item.$1, color: AppColors.primary, size: 22),
                         const SizedBox(width: 12),
                         Expanded(
                             child: Text(item.$2,
