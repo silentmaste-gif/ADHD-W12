@@ -25,7 +25,7 @@ jobs:
         with:
           lfs: true
 
-        - name: Pull and validate binary assets
+      - name: Pull and validate binary assets
         shell: bash
         run: |
           git lfs install --local
@@ -33,7 +33,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          root = Path("flutter_app/assets")
+          root = Path("assets")
           files = [*root.glob("*.png"), *root.glob("*.jpg"), *root.glob("*.jpeg")]
           if not files:
             raise SystemExit("No image assets found.")
