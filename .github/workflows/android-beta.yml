@@ -25,6 +25,29 @@ jobs:
         with:
           lfs: true
 
+        - name: Pull and validate binary assets
+        shell: bash
+        run: |
+          git lfs install --local
+          git lfs pull
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("flutter_app/assets")
+          files = [*root.glob("*.png"), *root.glob("*.jpg"), *root.glob("*.jpeg")]
+          if not files:
+            raise SystemExit("No image assets found.")
+          for path in files:
+            data = path.read_bytes()
+            if data.startswith(b"version https://git-lfs.github.com/spec/v1"):
+              raise SystemExit(f"Git LFS pointer was not hydrated: {path}")
+            if path.suffix.lower() == ".png" and not data.startswith(b"\x89PNG\r\n\x1a\n"):
+              raise SystemExit(f"Invalid PNG asset: {path}")
+            if path.suffix.lower() in {".jpg", ".jpeg"} and not data.startswith(b"\xff\xd8\xff"):
+              raise SystemExit(f"Invalid JPEG asset: {path}")
+          print(f"Validated {len(files)} binary image assets.")
+          PY
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
