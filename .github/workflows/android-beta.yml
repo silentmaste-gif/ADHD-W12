@@ -91,14 +91,14 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
-test -s android/upload-keystore.jks
-
-printf '%s\n' \
-  "storePassword=$STORE_PASSWORD" \
-  "keyPassword=$KEY_PASSWORD" \
-  "keyAlias=$KEY_ALIAS" \
-  "storeFile=upload-keystore.jks" > android/key.properties
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+          test -s android/upload-keystore.jks
+          
+          printf '%s\n' \
+            "storePassword=$STORE_PASSWORD" \
+            "keyPassword=$KEY_PASSWORD" \
+            "keyAlias=$KEY_ALIAS" \
+            "storeFile=upload-keystore.jks" > android/key.properties
 
       - name: Build Google Play App Bundle
         run: flutter build appbundle --release
